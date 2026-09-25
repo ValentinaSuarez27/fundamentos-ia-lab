@@ -1,0 +1,172 @@
+import requests
+import pandas as pd
+import matplotlib.pyplot as plt
+from datetime import datetime, timedelta
+import os
+import numpy as np
+from typing import Optional, Tuple, Dict, Any
+
+# --- Constantes Globales CORREGIDAS ---
+MANIZALES_LAT = 5.07
+MANIZALES_LON = -75.52
+# Endpoint CORREGIDO para datos históricos
+API_URL = "https://api.open-meteo.com/v1/historical"
+DIAS_A_CONSULTAR = 30
+HORA_LOCAL = "America/Bogota"
+
+def fetch_historical_weather_data(lat: float, lon: float, days: int) -> Optional[pd.DataFrame]:
+    """
+    Consulta la API de Open-Meteo para obtener datos históricos de temperatura.
+
+    Args:
+        lat: Latitud del punto de interés.
+        lon: Longitud del punto de interés.
+        days: Número de días históricos a consultar.
+
+    Returns:
+        Un DataFrame de pandas con las columnas de temperatura, o None si falla la consulta.
+    """
+    print(f"🔍 Conectando a Open-Meteo para Manizales ({days} días)...")
+
+    # 1. Definición de Rango de Fechas
+    try:
+        # Asegurar que el rango sea histórico: Hoy menos N días hasta Hoy.
+        end_date = datetime.now().strftime('%Y-%m-%d')
+        start_date = (datetime.now() - timedelta(days=days - 1)).strftime('%Y-%m-%d')
+    except Exception as e:
+        print(f"❌ Error al calcular las fechas: {e}")
+        return None
+
+    params = {
+        "latitude": lat,
+        "longitude": lon,
+        "daily": "temperature_max,temperature_min",
+        "start_date": start_date,
+        "end_date": end_date,
+        "timezone": "America/Bogota"
+    }
+
+    try:
+        # Se usa un timeout de 15 segundos para manejar cortes de conexión
+        response = requests.get(API_URL, params=params, timeout=15)
+        response.raise_for_status() # Lanza excepción para códigos 4xx/5xx
+
+        data: Dict[str, Any] = response.json()
+
+        # 2. Validación de la respuesta
+        if not data.get('daily'):
+            print("❌ Error de validación: La API no devolvió datos diarios.")
+            return None
+
+        try:
+            # Crear DataFrame
+            df = pd.DataFrame({
+                'date': pd.to_datetime(data['daily']['time']),
+                'temp_max': data['daily']['temperature_max'],
+                'temp_min': data['daily']['temperature_min']
+            })
+
+            print("✅ Datos obtenidos y validados correctamente.")
+            return df
+
+        except KeyError as e:
+            print(f"❌ Error de estructura de JSON: Falta la clave esperada {e}. Verifique la documentación de la API.")
+            return None
+        except Exception as e:
+            print(f"❌ Error al procesar el DataFrame: {e}")
+            return None
+
+    except requests.exceptions.Timeout:
+        print("🚨 Error de Conexión: Tiempo de espera excedido. Revise su conexión a internet.")
+        return None
+    except requests.exceptions.ConnectionError:
+        print("🚨 Error de Conexión: No se pudo conectar con la API. Verifique su red.")
+        return None
+    except requests.exceptions.HTTPError as e:
+        # Manejo específico del 404 que es lo que ocurre
+        if e.response.status_code == 404:
+             print(f"\n🛑 Error de API 404: El endpoint '{API_URL}' no reconoce la combinación de parámetros
+(Lat/Lon/Fechas/Parametros).")
+             print("   Es posible que haya un cambio en la estructura de la API o que el rango de fechas sea demasiado
+amplio.")
+        else:
+             print(f"🚨 Error HTTP: Falló la solicitud API. Código: {e.response.status_code}. Mensaje: {e}")
+        return None
+
+def calculate_statistics(df: pd.DataFrame) -> Tuple[float, float, float, float, str, str]:
+    """
+    Calcula estadísticas descriptivas para la temperatura máxima.
+    """
+    temp_max = df['temp_max']
+
+    # 3. Cálculo de estadísticas
+    media = temp_max.mean()
+    min_val = temp_max.min()
+    max_val = temp_max.max()
+    std_dev = temp_max.std()
+
+    # Encontrar fechas de mínimo y máximo
+    date_min = df.loc[temp_max.idxmin(), 'date'].strftime('%Y-%m-%d')
+    date_max = df.loc[temp_max.idxmax(), 'date'].strftime('%Y-%m-%d')
+
+    return media, min_val, max_val, std_dev, date_min, date_max
+
+def generate_plot(df: pd.DataFrame) -> None:
+    """
+    Genera y guarda una gráfica de línea de las temperaturas.
+    """
+    print("\n📊 Generando gráfico...")
+
+    # 4. Generar la gráfica
+    plt.figure(figsize=(12, 6))
+    plt.plot(df['date'], df['temp_max'], label='Máxima (°C)', marker='o', linestyle='-', color='red')
+    plt.plot(df['date'], df['temp_min'], label='Mínima (°C)', marker='o', linestyle='-', color='blue')
+
+    plt.title(f'Temperatura Diaria en Manizales, Colombia ({DIAS_A_CONSULTAR} días)')
+    plt.xlabel('Fecha')
+    plt.ylabel('Temperatura (°C)')
+    plt.grid(True, linestyle='--', alpha=0.6)
+    plt.legend()
+
+    # Mejorar la rotación de etiquetas de la fecha
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+
+    # Guardar la figura
+    nombre_archivo = "temperatura_manizales.png"
+    plt.savefig(nombre_archivo)
+    plt.close()
+    print(f"✅ Gráfico guardado exitosamente como '{nombre_archivo}'")
+
+def main():
+    """
+    Función principal que orquesta la descarga, análisis y visualización de datos.
+    """
+    # 1. Consulta y Validación de datos
+    weather_df = fetch_historical_weather_data(MANIZALES_LAT, MANIZALES_LON, DIAS_A_CONSULTAR)
+
+    if weather_df is None or weather_df.empty:
+        print("\n🛑 No se pudo procesar ningún dato. Terminando ejecución.")
+        return
+
+    # 3. Cálculo de Estadísticas
+    media, minimo, maximo, std_dev, date_min, date_max = calculate_statistics(weather_df)
+
+    # Mostrar resultados de forma ordenada
+    print("\n===================================================")
+    print("📈 ESTADÍSTICAS DE TEMPERATURA MÁXIMA (Últimos 30 días)")
+    print("===================================================")
+    print(f"🌡️  Temperatura Media:          {media:.2f} °C")
+    print(f"📉  Temperatura Mínima:        {minimo:.2f} °C (Ocurrió el {date_min})")
+    print(f"📈  Temperatura Máxima:        {maximo:.2f} °C (Ocurrió el {date_max})")
+    print(f"🌪️  Desviación Estándar:        {std_dev:.2f} °C")
+    print("===================================================")
+
+    # 4. Generar y guardar la gráfica
+    generate_plot(weather_df)
+
+if __name__ == "__main__":
+    print("===================================================")
+    print("       ANALISIS DE TEMPERATURA - MANIZALES")
+    print("===================================================")
+    main()

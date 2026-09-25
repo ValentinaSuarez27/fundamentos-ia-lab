@@ -1,0 +1,12 @@
+# Librerías de Python necesarias para el laboratorio
+# Instalar con: python -m pip install -r requirements.txt
+
+# Componente 2: comunicación HTTP con las APIs locales de Ollama y LM Studio
+requests==2.34.2
+
+# Componentes 3 y 4: análisis de datos y visualización
+pandas==3.0.6
+matplotlib==3.11.2
+
+# Componente 4: modelo predictivo (regresión lineal) y métricas
+scikit-learn==1.9.1

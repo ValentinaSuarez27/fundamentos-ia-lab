@@ -1,0 +1,4 @@
+﻿Método,MAE (°C),RMSE (°C),Días evaluados
+Regresión lineal (7 rezagos),0.6656955368308954,0.8282133537078055,60
+Persistencia,0.68,0.8491171886141514,60
+Media móvil 7 días,0.7771428571428574,0.9936054049169989,60
