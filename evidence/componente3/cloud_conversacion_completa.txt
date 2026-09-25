@@ -1,0 +1,27 @@
+Escribe un programa completo en Python 3 que haga lo siguiente:
+
+Consulte la API pública de Open-Meteo (no requiere clave) para obtener la temperatura máxima y mínima diaria de Manizales, Colombia (latitud 5.07, longitud -75.52), de los últimos 30 días, usando la zona horaria America/Bogota.
+Valide la respuesta: código HTTP, que el JSON tenga las claves esperadas, que las listas de fechas y temperaturas tengan la misma longitud y que no haya valores nulos. Maneja errores de conexión y tiempo de espera con mensajes claros.
+Calcule para la temperatura máxima: media, mínimo, máximo, desviación estándar y las fechas en que ocurrieron el mínimo y el máximo. Muestra los resultados en consola de forma ordenada.
+Genere una gráfica de línea con la temperatura máxima y mínima por fecha, con título, etiquetas en los ejes y leyenda, y guárdala como "temperatura_manizales.png".
+
+Requisitos: usa las librerías requests, pandas y matplotlib. Organiza el código en funciones con docstrings y un bloque if __name__ == "__main__". Al final, sugiere al menos 3 pruebas para verificar que el programa funciona correctamente.
+
+Voy a comprobar el programa con datos simulados, ya que este entorno no tiene acceso a internet.
+
+El programa se instala con pip install requests pandas matplotlib y se ejecuta con python temperatura_manizales.py. Como este entorno no tiene internet, no pude llamar a la API real. Sí lo probé con datos simulados: el cálculo de estadísticas, la gráfica, la detección de nulos y el manejo del tiempo de espera funcionan.
+
+Decisiones de diseño
+
+Fechas: usa el endpoint /v1/forecast con past_days=30 y forecast_days=1. Luego descarta el día actual, que en Bogotá aún está incompleto, y conserva los 30 días completos más recientes.
+Desviación estándar: es la muestral (ddof=1), que es la opción por defecto de pandas. Si prefieres la poblacional, usa serie.std(ddof=0).
+Empates: si el mínimo o el máximo se repite en varios días, se muestran todas las fechas.
+Errores: los problemas de conexión y de validación lanzan una excepción propia, ErrorDatosClima, con un mensaje claro. En ese caso el programa termina con código de salida 1.
+
+Pruebas sugeridas (con pytest y unittest.mock)
+
+Caso feliz con datos simulados: crea un JSON con 31 fechas y valores conocidos, por ejemplo máximas [20, 22, 24, ...]. Pasa una fecha hoy fija a construir_dataframe. Verifica que queden exactamente 30 filas y que la media, el mínimo, el máximo, la desviación y las fechas coincidan con valores calculados a mano.
+Validación de estructura: comprueba que validar_datos lance ErrorDatosClima en tres casos: cuando falta la clave daily o temperature_2m_min, cuando las listas tienen longitudes distintas y cuando hay un None en alguna lista.
+Errores de red: usa mock.patch("requests.get") para simular requests.exceptions.Timeout, ConnectionError y una respuesta con status_code=400. Verifica que obtener_datos lance ErrorDatosClima con el mensaje correspondiente y que main() devuelva 1.
+Gráfica: llama a generar_grafica(df, tmp_path / "g.png") y verifica que el archivo exista y pese más de 0 bytes.
+Prueba de integración real (opcional, requiere internet): ejecuta el programa completo. Comprueba que el período mostrado termine ayer, que las temperaturas sean razonables para Manizales (máximas de unos 18 a 26 °C) y que se genere temperatura_manizales.png.
